@@ -1,0 +1,45 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ['./app/**/*.{js,jsx,ts,tsx}', './src/**/*.{js,jsx,ts,tsx}'],
+  presets: [require('nativewind/preset')],
+  theme: {
+    extend: {
+      colors: {
+        cream: '#FFFFFF',
+        white: '#FFFFFF',
+        mint: '#76B994',
+        'mint-dark': '#4A9B73',
+        'mint-light': '#E8F5EE',
+        peach: '#F8B470',
+        'peach-dark': '#D4893A',
+        'peach-light': '#FEF3E8',
+        sky: '#6BAED6',
+        'sky-dark': '#3D8BB8',
+        'sky-light': '#D6EAF8',
+        terracotta: '#F8B470',
+        'terracotta-dark': '#D4893A',
+        sage: '#76B994',
+        'sage-light': '#E8F5EE',
+        walnut: '#1A1A1A',
+        ink: '#1A1A1A',
+        'warm-gray': '#8E8E93',
+        muted: '#8E8E93',
+        surface: '#F5F5F7',
+        'not-indicated': '#FEF3E8',
+        'not-indicated-border': '#F8B470',
+        suggestion: '#D6EAF8',
+        'suggestion-border': '#6BAED6',
+        error: '#FEE2E2',
+        'error-text': '#B91C1C',
+      },
+      borderRadius: {
+        '4xl': '2rem',
+      },
+      boxShadow: {
+        card: '0 4px 20px rgba(0, 0, 0, 0.06)',
+        soft: '0 2px 12px rgba(0, 0, 0, 0.04)',
+      },
+    },
+  },
+  plugins: [],
+};

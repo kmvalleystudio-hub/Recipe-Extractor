@@ -1,0 +1,153 @@
+/** Shared helpers to dedupe AI ingredient amount/name overlap */
+
+const LEADING_AMOUNT_RE =
+  /^(\d+(?:\.\d+)?(?:\s*\/\s*\d+)?)\s*([a-zA-Z(%]+(?:\(\s*s\s*\))?[^\s,]*)?\s*,?\s*/;
+
+const TIME_UNIT_RE = /\b(?:hours?|hrs?|hr|minutes?|mins?|min|seconds?|secs?|sec)\b/i;
+const VOLUME_UNIT_RE = /\b(?:tbsp|tsp|cup|cups|g|kg|lb|lbs?|oz|ml|l|clove|cloves|piece|pieces)\b/i;
+
+export function isTimeDurationPhrase(text: string): boolean {
+  const t = stripNotIndicatedMarkers(text).trim();
+  if (!t || !TIME_UNIT_RE.test(t)) return false;
+  if (VOLUME_UNIT_RE.test(t)) return false;
+  return /^(?:at least\s+)?\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?\s*(?:hours?|hrs?|hr|minutes?|mins?|min|seconds?|secs?|sec)\b/i.test(
+    t
+  );
+}
+
+export function stripLeadingTimeDuration(text: string): string {
+  return text
+    .replace(
+      /^(?:at least\s+)?\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?\s*(?:hours?|hrs?|hr|minutes?|mins?|min|seconds?|secs?|sec)\s+/i,
+      ''
+    )
+    .trim();
+}
+
+export function fixCommonIngredientTypos(text: string): string {
+  return text
+    .replace(/\bpapioka\b/gi, 'tapioca')
+    .replace(/\bpaprioka\b/gi, 'tapioca')
+    .replace(/\btapioka\b/gi, 'tapioca');
+}
+
+export function stripNotIndicatedMarkers(text: string): string {
+  return text
+    .replace(/\(\s*not indicated\s*\)/gi, '')
+    .replace(/\[\s*not indicated\s*\]/gi, '')
+    .replace(/\bnot indicated\b/gi, '')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Normalize units/phrasing so "1 lb" and "1 pound" compare equal */
+export function normalizeMeasurePhrase(text: string): string {
+  return stripNotIndicatedMarkers(text)
+    .toLowerCase()
+    .replace(/\bpounds?\b/g, 'lb')
+    .replace(/\blbs?\b/g, 'lb')
+    .replace(/\bounces?\b/g, 'oz')
+    .replace(/\bgrams?\b/g, 'g')
+    .replace(/\bkilograms?\b/g, 'kg')
+    .replace(/\bclove\(s\)/g, 'cloves')
+    .replace(/\bcloves?\b/g, 'clove')
+    .replace(/\btablespoons?\b/g, 'tbsp')
+    .replace(/\bteaspoons?\b/g, 'tsp')
+    .replace(/[(),]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function extractLeadingAmount(text: string): string | null {
+  const m = text.trim().match(LEADING_AMOUNT_RE);
+  if (!m) return null;
+  return m[2] ? `${m[1]} ${m[2].replace(/,\s*$/, '')}`.trim() : m[1].trim();
+}
+
+export function measuresEquivalent(a: string, b: string): boolean {
+  const na = normalizeMeasurePhrase(a);
+  const nb = normalizeMeasurePhrase(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.startsWith(nb) || nb.startsWith(na)) return true;
+
+  const numUnit = (s: string) => {
+    const m = s.match(/^(\d+(?:\.\d+)?(?:\s*\/\s*\d+)?)\s*(.*)$/);
+    return m ? { num: m[1], unit: m[2].trim() } : null;
+  };
+  const pa = numUnit(na);
+  const pb = numUnit(nb);
+  if (pa && pb && pa.num === pb.num && pa.unit === pb.unit) return true;
+
+  return false;
+}
+
+/** Remove leading amount from name when it repeats extractedAmount */
+export function stripDuplicateLeadingAmount(amount: string, name: string): string {
+  if (!amount.trim() || !name.trim()) return name.trim();
+
+  const lead = extractLeadingAmount(name);
+  if (lead && measuresEquivalent(amount, lead)) {
+    return name.replace(LEADING_AMOUNT_RE, '').trim();
+  }
+
+  return name.trim();
+}
+
+/** Merge amount + unit fields without "1 lb 1 pound" style duplicates */
+export function mergeAmountParts(amount: string, unit: string): string {
+  const a = stripNotIndicatedMarkers(amount);
+  const u = stripNotIndicatedMarkers(unit);
+  if (!a && !u) return '';
+  if (!a) return u;
+  if (!u) return a;
+  if (measuresEquivalent(a, u)) return a;
+  if (a.toLowerCase().includes(u.toLowerCase())) return a;
+  if (u.toLowerCase().includes(a.toLowerCase())) return u;
+
+  const measureRe =
+    /\d+(?:\.\d+)?\s*(?:g|kg|lb|lbs?|oz|ml|l|cups?|tbsp|tsp|cloves?|clove\(s\)|pounds?|eggs?|pieces?)/i;
+  if (measureRe.test(a) && measureRe.test(u)) return a;
+
+  return `${a} ${u}`.trim();
+}
+
+export function dedupeIngredientLine(text: string): string {
+  let result = stripNotIndicatedMarkers(text).replace(/\s+/g, ' ').trim();
+
+  const words = result.split(' ');
+  const out: string[] = [];
+  for (const word of words) {
+    const prev = out[out.length - 1];
+    if (prev && prev.toLowerCase() === word.toLowerCase()) continue;
+    out.push(word);
+  }
+  result = out.join(' ');
+
+  // Collapse equivalent leading amounts: "1 lb 1 pound chicken" → "1 lb chicken"
+  const lead1 = extractLeadingAmount(result);
+  if (lead1) {
+    const rest = result.slice(lead1.length).trim();
+    const lead2 = extractLeadingAmount(rest);
+    if (lead2 && measuresEquivalent(lead1, lead2)) {
+      result = `${lead1} ${rest.replace(LEADING_AMOUNT_RE, '').trim()}`.trim();
+    }
+  }
+
+  const parts = result.split(' ');
+  for (let len = Math.min(4, Math.floor(parts.length / 2)); len >= 1; len--) {
+    const suffix = parts.slice(-len).join(' ').toLowerCase();
+    const prefix = parts.slice(0, -len).join(' ').toLowerCase();
+    if (prefix.includes(suffix)) {
+      result = parts.slice(0, -len).join(' ');
+      break;
+    }
+  }
+
+  return result.trim();
+}
+
+export function normalizeIngredientText(text: string): string {
+  return fixCommonIngredientTypos(stripLeadingTimeDuration(stripNotIndicatedMarkers(text)));
+}

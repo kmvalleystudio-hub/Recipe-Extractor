@@ -1,0 +1,7 @@
+# Local OpenAI-compatible Whisper API for Recipe Extractor
+# Python 3.11–3.12 recommended (3.14 may lack wheels for some packages)
+
+faster-whisper>=1.1.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
