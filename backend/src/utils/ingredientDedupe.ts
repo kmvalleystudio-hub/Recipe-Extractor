@@ -147,6 +147,47 @@ export function dedupeIngredientLine(text: string): string {
   return result.trim();
 }
 
+/** Strip list bullet markers (-, •, *) from ingredient text */
+export function stripBulletPrefix(text: string): string {
+  return text.replace(/^[\s•*\-–—]+/, '').trim();
+}
+
+/** Split "2 tbsp butter, 1 tbsp garlic, 3 tbsp honey" into separate ingredient chunks */
+export function splitCombinedIngredientText(text: string): string[] {
+  const cleaned = stripBulletPrefix(text).trim();
+  if (!cleaned) return [];
+
+  const parts = cleaned.split(/,\s*(?=[-•*–—]?\s*\d)/).map((p) => stripBulletPrefix(p).trim());
+  if (parts.length > 1) return parts.filter(Boolean);
+  return [cleaned];
+}
+
+/** Move product name out of amount field ("2 tbsp Anchor butter" → amount + name) */
+export function splitAmountAndName(amount: string, name: string): { amount: string; name: string } {
+  let a = stripBulletPrefix(stripNotIndicatedMarkers(amount));
+  let n = stripBulletPrefix(stripNotIndicatedMarkers(name));
+
+  const amountLead = extractLeadingAmount(a);
+  if (amountLead && a.length > amountLead.length + 2) {
+    const rest = a.slice(amountLead.length).trim();
+    if (rest && (!n || n.toLowerCase() === 'butter' || rest.length > n.length)) {
+      return { amount: amountLead, name: rest };
+    }
+  }
+
+  if (!a && n) {
+    const fromName = extractLeadingAmount(n);
+    if (fromName) {
+      return {
+        amount: fromName,
+        name: n.slice(fromName.length).trim(),
+      };
+    }
+  }
+
+  return { amount: a, name: n };
+}
+
 export function normalizeIngredientText(text: string): string {
-  return fixCommonIngredientTypos(stripLeadingTimeDuration(stripNotIndicatedMarkers(text)));
+  return fixCommonIngredientTypos(stripLeadingTimeDuration(stripBulletPrefix(stripNotIndicatedMarkers(text))));
 }

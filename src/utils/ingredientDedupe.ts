@@ -41,6 +41,44 @@ export function stripNotIndicatedMarkers(text: string): string {
     .trim();
 }
 
+export function stripBulletPrefix(text: string): string {
+  return text.replace(/^[\s•*\-–—]+/, '').trim();
+}
+
+export function splitCombinedIngredientText(text: string): string[] {
+  const cleaned = stripBulletPrefix(text).trim();
+  if (!cleaned) return [];
+
+  const parts = cleaned.split(/,\s*(?=[-•*–—]?\s*\d)/).map((p) => stripBulletPrefix(p).trim());
+  if (parts.length > 1) return parts.filter(Boolean);
+  return [cleaned];
+}
+
+export function splitAmountAndName(amount: string, name: string): { amount: string; name: string } {
+  let a = stripBulletPrefix(stripNotIndicatedMarkers(amount));
+  let n = stripBulletPrefix(stripNotIndicatedMarkers(name));
+
+  const amountLead = extractLeadingAmount(a);
+  if (amountLead && a.length > amountLead.length + 2) {
+    const rest = a.slice(amountLead.length).trim();
+    if (rest && (!n || n.toLowerCase() === 'butter' || rest.length > n.length)) {
+      return { amount: amountLead, name: rest };
+    }
+  }
+
+  if (!a && n) {
+    const fromName = extractLeadingAmount(n);
+    if (fromName) {
+      return {
+        amount: fromName,
+        name: n.slice(fromName.length).trim(),
+      };
+    }
+  }
+
+  return { amount: a, name: n };
+}
+
 /** Normalize units/phrasing so "1 lb" and "1 pound" compare equal */
 export function normalizeMeasurePhrase(text: string): string {
   return stripNotIndicatedMarkers(text)
@@ -149,5 +187,5 @@ export function dedupeIngredientLine(text: string): string {
 }
 
 export function normalizeIngredientText(text: string): string {
-  return fixCommonIngredientTypos(stripLeadingTimeDuration(stripNotIndicatedMarkers(text)));
+  return fixCommonIngredientTypos(stripLeadingTimeDuration(stripBulletPrefix(stripNotIndicatedMarkers(text))));
 }

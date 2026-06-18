@@ -19,7 +19,6 @@ const TITLE_INGREDIENT_RULES: TitleIngredientRule[] = [
   { pattern: /\bfish\b/i, name: 'fish', usage: 'cooking' },
   { pattern: /\btofu\b/i, name: 'tofu', usage: 'cooking' },
   { pattern: /\bpasta\b/i, name: 'pasta', usage: 'cooking' },
-  { pattern: /\brice\b/i, name: 'rice', usage: 'cooking' },
   { pattern: /\bnoodles?\b/i, name: 'noodles', usage: 'cooking' },
 ];
 
@@ -48,7 +47,7 @@ function makeMissingIngredient(name: string, usage: string): Ingredient {
  * when the caption ingredient list omitted them.
  */
 export function fillTitleIngredients(recipe: RecipeExtraction): RecipeExtraction {
-  const title = `${recipe.recipeTitle} ${recipe.description}`;
+  const title = recipe.recipeTitle;
   const additions: Ingredient[] = [];
 
   for (const rule of TITLE_INGREDIENT_RULES) {

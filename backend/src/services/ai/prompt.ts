@@ -6,11 +6,11 @@ export const EXTRACTION_SYSTEM_PROMPT = `You are an expert recipe extraction ass
 
 LANGUAGE: The user specifies the video language. Write ALL extracted recipe text (title, description, ingredient names, instructions, notes) in that language. Do NOT translate to another language unless the source is in another language.
 
-INGREDIENTS: List each ingredient as a clean line — amount in extractedAmount, item name only in name (e.g. amount "1 lb", name "boneless chicken breasts"). Do NOT put prep notes, dice sizes, or "not indicated" inside the name field. Do not duplicate metric and imperial in both amount and unit fields — pick one. Do NOT put marination time or cook time in extractedAmount (e.g. never "1 hour" on soy sauce) — times belong in prepTime, cookTime, or instructions only.
+INGREDIENTS: List each ingredient as a clean line — amount in extractedAmount, item name only in name (e.g. extractedAmount "2 tbsp", name "light soy sauce"). Never put a leading hyphen in amounts (write "3 pcs" not "-3 pcs"). Do NOT put marination time or cook time in extractedAmount — times belong in prepTime, cookTime, or instructions only. When the caption has Ingredients and Sauce sections, set usage to "cooking" for main items and "sauce" for sauce items.
 
 COMPLETENESS: Extract EVERY ingredient explicitly listed in the source — including items under headings like "Marinade", "Sauce", "Glaze", "Dressing", or "For the chicken". Do not stop after the first few items. Facebook/Instagram captions often contain the full recipe in text form — parse all of them.
 
-INSTRUCTIONS: Extract ONLY actionable cooking steps (roast, blend, marinate, cook, simmer, baste, serve, etc.). Each step's "instruction" field MUST be a full sentence describing what to do.
+INSTRUCTIONS: Extract ONLY actionable cooking steps that appear in the source text (narration, captions, or post caption). If the source lists ingredients only and has no narrated or written steps, return an empty instructions array — do NOT invent a cooking method.
 
 DO NOT put these in instructions:
 - Creator dialog or reactions ("legit one of my fave", "easier for me to cook", etc.)

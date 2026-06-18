@@ -9,6 +9,8 @@ import {
   stripLeadingTimeDuration,
   fixCommonIngredientTypos,
   normalizeIngredientText,
+  stripBulletPrefix,
+  splitAmountAndName,
 } from '@/utils/ingredientDedupe';
 
 export const MISSING_AMOUNT = '—';
@@ -67,28 +69,36 @@ export function formatIngredientAmount(ingredient: Ingredient): string {
 
 export function formatIngredientLine(ingredient: Ingredient): string {
   const rawAmount = mergeAmountAndUnit(ingredient.extractedAmount, ingredient.unitOrSize);
-  let amount = rawAmount ? abbreviateCookingUnits(stripLeadingTimeDuration(rawAmount)) : MISSING_AMOUNT;
+  let amount = rawAmount
+    ? abbreviateCookingUnits(stripLeadingTimeDuration(stripBulletPrefix(rawAmount)))
+    : MISSING_AMOUNT;
   if (amount !== MISSING_AMOUNT && isTimeDurationPhrase(amount)) {
     amount = MISSING_AMOUNT;
   }
-  let name = cleanIngredientName(ingredient.name);
 
-  if (amount !== MISSING_AMOUNT) {
-    name = stripDuplicateLeadingAmount(amount, name);
+  const split = splitAmountAndName(
+    amount === MISSING_AMOUNT ? '' : amount,
+    cleanIngredientName(ingredient.name)
+  );
+  let name = fixCommonIngredientTypos(split.name);
+  let qty = split.amount ? abbreviateCookingUnits(split.amount) : MISSING_AMOUNT;
+
+  if (qty !== MISSING_AMOUNT) {
+    name = stripDuplicateLeadingAmount(qty, name);
   }
 
-  if (amount === MISSING_AMOUNT) return dedupeIngredientLine(name);
+  if (qty === MISSING_AMOUNT) return dedupeIngredientLine(name);
 
-  const amountLower = amount.toLowerCase();
+  const amountLower = qty.toLowerCase();
   const nameLower = name.toLowerCase();
-  if (nameLower && amountLower.includes(nameLower)) return dedupeIngredientLine(amount);
+  if (nameLower && amountLower.includes(nameLower)) return dedupeIngredientLine(qty);
   if (nameLower && nameLower.split(/\s+/).every((w) => amountLower.includes(w))) {
-    return dedupeIngredientLine(amount);
+    return dedupeIngredientLine(qty);
   }
 
-  if (!name) return dedupeIngredientLine(amount);
+  if (!name) return dedupeIngredientLine(qty);
 
-  return dedupeIngredientLine(fixCommonIngredientTypos(`${amount} ${name}`));
+  return dedupeIngredientLine(`${qty} ${name}`);
 }
 
 /** Turn AI array items (string or object) into readable bullet text */

@@ -10,6 +10,9 @@ import {
   stripLeadingTimeDuration,
   fixCommonIngredientTypos,
   normalizeIngredientText,
+  stripBulletPrefix,
+  splitCombinedIngredientText,
+  splitAmountAndName,
 } from './ingredientDedupe';
 
 type Ingredient = RecipeExtraction['ingredients'][number];
@@ -44,12 +47,13 @@ function removeTrailingRedundantPhrase(text: string): string {
 }
 
 function cleanField(text: string): string {
-  return removeTrailingRedundantPhrase(removeConsecutiveDuplicateWords(text.trim()));
+  return removeTrailingRedundantPhrase(removeConsecutiveDuplicateWords(stripBulletPrefix(text.trim())));
 }
 
 function reconcileNameAndAmount(name: string, amount: string): { name: string; amount: string } {
-  let n = cleanField(stripNotIndicatedMarkers(name));
-  let a = cleanField(stripNotIndicatedMarkers(amount));
+  const split = splitAmountAndName(amount, name);
+  let n = cleanField(normalizeIngredientText(split.name));
+  let a = cleanField(normalizeIngredientText(split.amount));
 
   if (!a) return { name: n, amount: '' };
   if (!n) return { name: '', amount: a };
@@ -83,8 +87,8 @@ function formatLine(name: string, amount: string): string {
   return dedupeIngredientLine(`${a} ${n}`);
 }
 
-function normalizeIngredientKey(line: string): string {
-  return line
+function normalizeIngredientKey(line: string, usage: string): string {
+  return `${usage}:${line}`
     .toLowerCase()
     .replace(/[&,]/g, ' and ')
     .replace(/\s+/g, ' ')
@@ -95,7 +99,7 @@ function normalizeIngredientKey(line: string): string {
 function sanitizeOneIngredient(ingredient: Ingredient): Ingredient {
   let cleanedName = normalizeIngredientText(cleanField(ingredient.name));
   let mergedAmount = mergeAmountParts(ingredient.extractedAmount, ingredient.unitOrSize);
-  mergedAmount = stripLeadingTimeDuration(stripNotIndicatedMarkers(mergedAmount));
+  mergedAmount = stripLeadingTimeDuration(stripBulletPrefix(stripNotIndicatedMarkers(mergedAmount)));
 
   if (isTimeDurationPhrase(mergedAmount)) {
     mergedAmount = '';
@@ -104,7 +108,8 @@ function sanitizeOneIngredient(ingredient: Ingredient): Ingredient {
   const { name, amount } = reconcileNameAndAmount(cleanedName, mergedAmount);
   cleanedName = fixCommonIngredientTypos(name || cleanedName);
 
-  const hasAmount = mergedAmount.length > 0 && !isNotIndicated(mergedAmount) && !isTimeDurationPhrase(amount);
+  const hasAmount =
+    mergedAmount.length > 0 && !isNotIndicated(mergedAmount) && !isTimeDurationPhrase(amount);
 
   return {
     ...ingredient,
@@ -114,25 +119,47 @@ function sanitizeOneIngredient(ingredient: Ingredient): Ingredient {
   };
 }
 
+/** Split one AI row that merged multiple comma-separated bullet ingredients */
+function expandCombinedIngredients(ingredient: Ingredient): Ingredient[] {
+  const combined = `${ingredient.extractedAmount} ${ingredient.name}`.trim();
+  const chunks = splitCombinedIngredientText(combined);
+
+  if (chunks.length <= 1) {
+    return [sanitizeOneIngredient(ingredient)];
+  }
+
+  return chunks.map((chunk) => {
+    const { amount, name } = splitAmountAndName('', chunk);
+    return sanitizeOneIngredient({
+      ...ingredient,
+      name: name || chunk,
+      extractedAmount: amount || 'not indicated',
+      unitOrSize: 'not indicated',
+    });
+  });
+}
+
 function deduplicateIngredients(ingredients: Ingredient[]): Ingredient[] {
   const seen = new Set<string>();
   const result: Ingredient[] = [];
 
   for (const ing of ingredients) {
+    const usage = normalizeIngredientUsage(ing.usage);
     const line = formatLine(ing.name, mergeAmountParts(ing.extractedAmount, ing.unitOrSize));
-    const key = normalizeIngredientKey(line);
+    const key = normalizeIngredientKey(line, usage);
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    result.push(ing);
+    result.push({ ...ing, usage });
   }
 
   return result;
 }
 
 export function sanitizeRecipeIngredients(recipe: RecipeExtraction): RecipeExtraction {
-  const cleaned = recipe.ingredients
-    .map(sanitizeOneIngredient)
-    .filter((i) => i.name.trim().length > 0 || !isNotIndicated(i.extractedAmount));
+  const expanded = recipe.ingredients.flatMap(expandCombinedIngredients);
+  const cleaned = expanded.filter(
+    (i) => i.name.trim().length > 0 || !isNotIndicated(i.extractedAmount)
+  );
 
   const deduped = deduplicateIngredients(cleaned);
 

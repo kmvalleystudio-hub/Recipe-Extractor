@@ -4,8 +4,10 @@ import { validateVideoUrl } from '../utils/urlValidation';
 import { fetchVideoContent, buildExtractionTranscript } from '../services/videoContent';
 import { extractRecipeWithAI } from '../services/ai';
 import type { ExtractionInput } from '../services/ai/types';
+import { enforceInstructionSource } from '../utils/instructionSource';
 import { sanitizeRecipeInstructions } from '../utils/fillInstructions';
 import { fillTitleIngredients } from '../utils/ingredientEnrich';
+import { applyCaptionIngredients } from '../utils/applyCaptionIngredients';
 import { sanitizeRecipeIngredients } from '../utils/sanitizeIngredients';
 import { getThumbnailUrlForVideoAsync } from '../utils/thumbnails';
 import type { SourceContent } from '../schemas/extractResponse';
@@ -164,10 +166,24 @@ extractRecipeRouter.post('/', async (req: Request, res: Response) => {
       }
     }
 
-    const recipe = sanitizeRecipeIngredients(
-      fillTitleIngredients(
-        sanitizeRecipeInstructions(await extractRecipeWithAI(extractionInput), extractionInput.transcript)
-      )
+    const recipe = enforceInstructionSource(
+      sanitizeRecipeIngredients(
+        fillTitleIngredients(
+          applyCaptionIngredients(
+            sanitizeRecipeInstructions(
+              await extractRecipeWithAI(extractionInput),
+              extractionInput.transcript
+            ),
+            postCaption
+          )
+        )
+      ),
+      {
+        sources: extractionInput.sources,
+        spokenTranscript,
+        postCaption,
+        combinedTranscript: extractionInput.transcript,
+      }
     );
 
     recipe.recipeTitle = sanitizeRecipeTitle(
